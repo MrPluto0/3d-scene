@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" href="data:,">
 <title>雪夜馄饨摊 · 交互 3D</title>
 <style>
   :root{ --bg:#05070d; --ink:#e8eaf2; --dim:#8b93a8; --warm:#ffb46b; --line:rgba(139,147,168,.2); --mono:ui-monospace,"SF Mono",Menlo,monospace; --serif:"Songti SC","Noto Serif SC",serif; }
@@ -140,11 +141,17 @@ loader.parse(b64ToBuf(GLB_B64), '', (gltf) => {
       o.castShadow = o.receiveShadow = true;
       if (o.material){
         o.material.side = THREE.DoubleSide;      // 单面雪片/棚布从下往上看
+        /* Blender 导出的路灯/灯泡自发光强度 14~40，线性 HDR 下远超 bloom 阈值，会把整片灯区炸成白团 */
+        if (o.material.emissiveIntensity > 8) o.material.emissiveIntensity = 8;
       }
     }
     if (o.isLight){
       /* Blender W -> glTF candela 换算出的强度在 three.js 里高约两个数量级，压回夜间量级 */
-      if (o.isPointLight || o.isSpotLight) o.intensity /= 250;
+      if (o.isPointLight || o.isSpotLight){
+        o.intensity /= 250;
+        /* 街灯 107cd / 摊位吊灯 31cd：贴着浅色地面/台面时 1/d² 衰减后仍把大片区域推过 bloom 阈值 → 白斑 */
+        o.intensity = Math.min(o.intensity, 9);
+      }
       else if (o.isDirectionalLight) o.intensity /= 300;
       o.castShadow = false;                       // 只给主角灯开影子
       if (o.name === 'WS_L_Bulb' || o.name === 'WS_L_Street'){
@@ -168,7 +175,9 @@ loader.parse(b64ToBuf(GLB_B64), '', (gltf) => {
 /* ---------- 三渲二 / 写实 双管线（与 wonton-mini 同一套视觉语言） ---------- */
 /* 3 级 gradientMap：MeshToonMaterial 的色阶分档 */
 const gradientMap = (() => {
-  const tex = new THREE.DataTexture(new Uint8Array([70, 150, 255]), 3, 1, THREE.RedFormat);
+  /* 暗档 66：配合压下来的冷蓝补光，暗面是「深蓝」而不是「灰白」也不是死黑；
+     亮档 235 封顶：白桌/台面在暖光下不至于推满 255 被裁成平白，把暖橙色留给 ACES */
+  const tex = new THREE.DataTexture(new Uint8Array([66, 145, 235]), 3, 1, THREE.RedFormat);
   tex.minFilter = THREE.NearestFilter;
   tex.magFilter = THREE.NearestFilter;
   tex.generateMipmaps = false;
@@ -187,11 +196,18 @@ moon.shadow.bias = -0.0006;
 moon.visible = false;
 moon.userData.ours = true;
 scene.add(moon);
-const skyFill = new THREE.DirectionalLight(0x44597f, 0.38);
+const skyFill = new THREE.DirectionalLight(0x44597f, 0.25);   // 天空冷补压到 ~55%：只留轮廓可读，不抬亮暗部
 skyFill.position.set(6, 10, 6);
 skyFill.visible = false;
 skyFill.userData.ours = true;
 scene.add(skyFill);
+/* 三渲二专属暖溢光：写实里靠 GLB 暖灯的 PBR 衰减自然照亮摊后门洞/墙；
+   三渲二色阶压深后那里会塌成死黑，用一盏低强度暖点光补回「微弱可读」并顺带给光池边缘添暖 */
+const warmSpill = new THREE.PointLight(0xffb877, 2.2, 6, 2);
+warmSpill.position.set(0.5, 1.7, -3.6);
+warmSpill.visible = false;
+warmSpill.userData.ours = true;
+scene.add(warmSpill);
 
 const OUTLINE_COLOR = 0x0d1119;
 const toonRegistry = [];   // { mesh, origMat, toonMat, outline }
@@ -202,6 +218,7 @@ function toonifyMaterial(src){
   const t = new THREE.MeshToonMaterial({
     gradientMap,
     map: src.map || null,
+    emissiveMap: src.emissiveMap || null,   // 招牌/灯箱的自发光贴图必须保留，否则变成无纹理白板
     alphaMap: src.alphaMap || null,
     transparent: src.transparent,
     opacity: src.opacity,
@@ -212,16 +229,19 @@ function toonifyMaterial(src){
   });
   t.color.copy(src.color);
   t.emissive.copy(src.emissive);
-  t.emissiveIntensity = src.emissiveIntensity;
+  t.emissiveIntensity = Math.min(src.emissiveIntensity, 1.0); // 三渲二：自发光只做「亮块」点缀，别把光池中心曝成白色盖掉暖橙
   return t;
 }
 
-/* inverted hull 描边：同几何体的 BackSide 深色壳，顶点着色器里沿法线膨胀（厚度随体量缩放） */
+/* inverted hull 描边：同几何体的 BackSide 深色壳，顶点着色器里沿法线膨胀（厚度随体量缩放）。
+   只给大中型物件（半径 > 0.22）加壳：小件（碗筷/瓶罐）加壳既看不清也白费 draw call */
+const OUTLINE_MIN_R = 0.22;
 function buildOutline(mesh){
   if (!mesh.geometry || !mesh.geometry.attributes.normal) return null;
   if (!mesh.geometry.boundingSphere) mesh.geometry.computeBoundingSphere();
   const r = mesh.geometry.boundingSphere.radius || 1;
-  const th = THREE.MathUtils.clamp(r * 0.018, 0.005, 0.03);
+  if (r < OUTLINE_MIN_R) return null;
+  const th = THREE.MathUtils.clamp(r * 0.022, 0.006, 0.035);
   const mat = new THREE.MeshBasicMaterial({ color: OUTLINE_COLOR, side: THREE.BackSide });
   mat.onBeforeCompile = (sh) => {
     sh.vertexShader = sh.vertexShader.replace(
@@ -252,17 +272,24 @@ function setStyle(mode){
     r.mesh.material = toon ? r.toonMat : r.origMat;
     if (r.outline) r.outline.visible = toon;
   }
-  for (const l of glbLights) l.intensity = (l.userData.baseIntensity || l.intensity) * (toon ? 0.45 : 1);
-  moon.visible = skyFill.visible = toon;
-  hemi.intensity = toon ? 1.05 : 0.55;
-  hemi.color.setHex(toon ? 0x3d5473 : 0x28344d);
-  hemi.groundColor.setHex(toon ? 0x1c1a26 : 0x05060a);
-  renderer.toneMappingExposure = toon ? 1.02 : 0.85;
-  bloom.strength = toon ? 0.55 : 0.25;           // 三渲二：灯串/招牌的辉光放开一点
-  bloom.threshold = toon ? 0.62 : 1.0;
-  scene.background.setHex(toon ? 0x11182b : 0x06080f);
-  scene.fog.color.setHex(toon ? 0x161e33 : 0x060a14);
-  scene.fog.density = toon ? 0.016 : 0.022;
+  /* GLB 灯按冷暖分档：暖橙主光（吊灯/灯笼/rim/溢光）提到 0.55 撑起光池；
+     冷色 GLB 灯（WS_L_Moon/街灯/冷池，写实基准 3.8~6.8）在三渲二里压到 0.15 ——
+     否则它们把整片建筑和雪地抬成纸白，冷暖对撞就没了 */
+  for (const l of glbLights){
+    const warm = l.color.r > l.color.b * 1.15;
+    l.intensity = (l.userData.baseIntensity || l.intensity) * (toon ? (warm ? 0.5 : 0.15) : 1);
+  }
+  moon.visible = skyFill.visible = warmSpill.visible = toon;
+  /* 半球补光 1.2 → 0.6（50%）：雪地/路面/墙面回到夜色，暗部交给更深的冷蓝色 */
+  hemi.intensity = toon ? 0.6 : 0.55;
+  hemi.color.setHex(toon ? 0x273b5f : 0x28344d);
+  hemi.groundColor.setHex(toon ? 0x0e0d18 : 0x05060a);
+  renderer.toneMappingExposure = 0.85;           // 两档同曝光：三渲二不再靠提亮补光，明暗全交给光比
+  bloom.strength = toon ? 0.36 : 0.25;           // 三渲二：辉光只留灯珠本身，光池本体交给暖橙光比（ wonton-mini 同源）
+  bloom.threshold = toon ? 0.95 : 1.0;
+  scene.background.setHex(toon ? 0x0c1322 : 0x06080f);
+  scene.fog.color.setHex(toon ? 0x0d1424 : 0x060a14);
+  scene.fog.density = toon ? 0.019 : 0.022;      // 三渲二冷雾略加密，纵深拉开
 }
 document.querySelectorAll('[data-style]').forEach(b => b.addEventListener('click', () => {
   document.querySelectorAll('[data-style]').forEach(x => x.classList.remove('on'));
