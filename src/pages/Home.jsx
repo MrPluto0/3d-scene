@@ -9,10 +9,10 @@ const scenes = [
     tag: 'three.js · toon'
   },
   {
-    to: '/wonton-stall',
+    to: '/stall',
     title: '雪夜馄饨摊',
-    sub: 'GLB 实时渲染',
-    desc: 'Blender 建模导出的 GLB：机位预设、双击聚焦，三渲二 / 写实一键切换。',
+    sub: 'GLB 图集 · 实时渲染',
+    desc: 'Blender 建模导出的 GLB：机位静帧图集、环景视频，加上网页实时场景——机位预设、落雪与蒸汽。',
     tag: 'GLB · PBR'
   }
 ];
