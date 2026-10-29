@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>雪夜馄饨摊 · A Wonton Stall on a Snowy Night</title>
+<style>
+  :root{
+    --bg:#05070d; --bg2:#080b14; --ink:#e8eaf2; --dim:#8b93a8; --warm:#ffb46b; --warm2:#ff7847;
+    --line:rgba(139,147,168,.18); --card:#0b0f1a; --serif:"Songti SC","Noto Serif SC",serif;
+    --sans:-apple-system,BlinkMacSystemFont,"PingFang SC","Segoe UI",sans-serif;
+    --mono:ui-monospace,"SF Mono",Menlo,monospace;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{background:var(--bg);color:var(--ink);font-family:var(--sans);overflow-x:hidden}
+  ::selection{background:rgba(255,180,107,.25)}
+
+  /* ---------- snow overlay ---------- */
+  #snow{position:fixed;inset:0;pointer-events:none;z-index:50;opacity:.8}
+  @media (prefers-reduced-motion: reduce){ #snow{display:none} }
+
+  /* ---------- hero ---------- */
+  .hero{position:relative;min-height:100vh;display:flex;align-items:flex-end;overflow:hidden}
+  .hero img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center 40%;
+    animation:heroIn 2.2s cubic-bezier(.2,.7,.2,1) both;filter:saturate(1.05)}
+  @keyframes heroIn{from{opacity:0;transform:scale(1.04)}to{opacity:1;transform:scale(1)}}
+  .hero::after{content:"";position:absolute;inset:0;
+    background:linear-gradient(to top, var(--bg) 0%, rgba(5,7,13,.25) 30%, rgba(5,7,13,0) 60%)}
+  .hero-inner{position:relative;z-index:2;width:100%;max-width:1280px;margin:0 auto;padding:0 48px 72px}
+  .kicker{font-family:var(--mono);font-size:12px;letter-spacing:.35em;color:var(--warm);text-transform:uppercase;margin-bottom:20px;opacity:0;animation:up 1s .6s both}
+  h1{font-family:var(--serif);font-weight:600;font-size:clamp(44px,7vw,88px);letter-spacing:.06em;line-height:1.1;
+    text-shadow:0 2px 40px rgba(0,0,0,.6);opacity:0;animation:up 1s .8s both}
+  .sub{margin-top:18px;font-size:clamp(15px,1.6vw,19px);color:var(--dim);letter-spacing:.12em;opacity:0;animation:up 1s 1s both}
+  .sub em{color:var(--warm);font-style:normal}
+  .meta{margin-top:34px;display:flex;gap:28px;flex-wrap:wrap;font-family:var(--mono);font-size:12px;color:var(--dim);opacity:0;animation:up 1s 1.15s both}
+  .meta span{border-left:2px solid var(--warm);padding-left:10px}
+  .meta a{color:var(--warm);text-decoration:none;border-bottom:1px solid rgba(255,180,107,.4)}
+  .meta a:hover{border-bottom-color:var(--warm)}
+  .cta{display:inline-flex;align-items:center;gap:8px;margin-top:30px;padding:13px 26px;border:1px solid rgba(255,180,107,.55);
+    color:var(--warm);text-decoration:none;font-family:var(--mono);font-size:13px;letter-spacing:.22em;border-radius:2px;
+    transition:all .3s;opacity:0;animation:up 1s 1.3s both}
+  .cta:hover{background:rgba(255,180,107,.12);border-color:var(--warm);transform:translateY(-2px)}
+  @keyframes up{from{opacity:0;transform:translateY(24px)}to{opacity:1;transform:none}}
+  .scroll-cue{position:absolute;bottom:26px;left:50%;transform:translateX(-50%);z-index:3;color:var(--dim);
+    font-family:var(--mono);font-size:11px;letter-spacing:.3em;animation:bob 2.4s ease-in-out infinite}
+  @keyframes bob{0%,100%{transform:translate(-50%,0);opacity:.4}50%{transform:translate(-50%,8px);opacity:1}}
+
+  /* ---------- sections ---------- */
+  section{max-width:1280px;margin:0 auto;padding:110px 48px}
+  .sec-head{display:flex;align-items:baseline;gap:22px;margin-bottom:14px}
+  .sec-no{font-family:var(--mono);font-size:12px;color:var(--warm);letter-spacing:.2em}
+  h2{font-family:var(--serif);font-size:clamp(26px,3.4vw,40px);font-weight:600;letter-spacing:.08em}
+  .sec-desc{color:var(--dim);max-width:640px;line-height:1.9;font-size:15px;margin-bottom:44px}
+
+  /* turntable */
+  .video-wrap{position:relative;border:1px solid var(--line);background:var(--card);padding:10px}
+  .video-wrap::before{content:"TURNTABLE · 1920×1080 · 30FPS";position:absolute;top:-9px;left:16px;background:var(--bg);
+    padding:0 10px;font-family:var(--mono);font-size:10px;letter-spacing:.25em;color:var(--dim)}
+  video{width:100%;display:block}
+  .video-note{margin-top:14px;font-family:var(--mono);font-size:12px;color:var(--dim);letter-spacing:.05em}
+
+  /* gallery */
+  .grid{display:grid;grid-template-columns:repeat(2,1fr);gap:26px}
+  .shot{position:relative;border:1px solid var(--line);background:var(--card);overflow:hidden;cursor:zoom-in;
+    transition:border-color .3s, transform .3s}
+  .shot:hover{border-color:rgba(255,180,107,.45);transform:translateY(-3px)}
+  .shot img{width:100%;display:block;aspect-ratio:16/9;object-fit:cover;transition:transform .6s cubic-bezier(.2,.7,.2,1)}
+  .shot:hover img{transform:scale(1.025)}
+  .shot-info{padding:18px 20px 20px;display:flex;justify-content:space-between;align-items:baseline;gap:12px}
+  .shot-title{font-family:var(--serif);font-size:18px;letter-spacing:.06em}
+  .shot-cam{font-family:var(--mono);font-size:11px;color:var(--dim);white-space:nowrap}
+  .shot-cap{padding:0 20px 20px;color:var(--dim);font-size:13.5px;line-height:1.8}
+
+  /* notes */
+  .notes{display:grid;grid-template-columns:repeat(3,1fr);gap:26px}
+  .note{border:1px solid var(--line);background:var(--card);padding:28px 26px}
+  .note h3{font-family:var(--serif);font-size:19px;letter-spacing:.1em;margin-bottom:16px;color:var(--warm)}
+  .note ul{list-style:none}
+  .note li{color:var(--dim);font-size:13.5px;line-height:1.8;padding-left:16px;position:relative;margin-bottom:9px}
+  .note li::before{content:"·";position:absolute;left:2px;color:var(--warm)}
+  .note li b{color:var(--ink);font-weight:500}
+
+  footer{border-top:1px solid var(--line);margin-top:80px;padding:44px 48px;display:flex;justify-content:space-between;
+    max-width:1280px;margin-left:auto;margin-right:auto;color:var(--dim);font-family:var(--mono);font-size:11.5px;letter-spacing:.15em;flex-wrap:wrap;gap:10px}
+
+  /* lightbox */
+  #lb{position:fixed;inset:0;background:rgba(3,4,8,.92);z-index:100;display:none;align-items:center;justify-content:center;cursor:zoom-out}
+  #lb.open{display:flex}
+  #lb img{max-width:94vw;max-height:92vh;border:1px solid var(--line)}
+  #lb .cap{position:absolute;bottom:28px;left:50%;transform:translateX(-50%);color:var(--dim);font-family:var(--mono);font-size:12px;letter-spacing:.2em}
+
+  @media (max-width:860px){
+    section{padding:80px 22px}
+    .hero-inner{padding:0 22px 60px}
+    .grid,.notes{grid-template-columns:1fr}
+    footer{padding:36px 22px}
+  }
+</style>
+</head>
+<body>
+
+<canvas id="snow"></canvas>
+
+<!-- ================= HERO ================= -->
+<header class="hero">
+  <img src="renders/01_hero_iso.png" alt="雪夜馄饨摊 等距全景">
+  <div class="hero-inner">
+    <div class="kicker">Blender Diorama · 雪国深夜食堂</div>
+    <h1>雪夜馄饨摊</h1>
+    <p class="sub">寒夜里的一口热气 —— 深夜的巷口，棚顶压着雪，锅里腾着雾，<em>最后一个客人还没走</em>。</p>
+    <div class="meta">
+      <span>BLENDER 5.2 · EEVEE</span>
+      <span>程序化建模 · 全场景手搓</span>
+      <span>体积蒸汽 · 粒子落雪 · AGX</span>
+    </div>
+    <a class="cta" href="viewer.html">自己转着看 · 交互 3D →</a>
+  </div>
+  <div class="scroll-cue">SCROLL ↓</div>
+</header>
+
+<!-- ================= TURNTABLE ================= -->
+<section id="turntable">
+  <div class="sec-head"><span class="sec-no">01</span><h2>环景摆动</h2></div>
+  <p class="sec-desc">摊位有墙、有背面，所以不做 360° 旋转，而是让镜头从前右到前左 120° 缓缓摆动——像一个人绕着这个街角，慢慢走了一小段。</p>
+  <div class="video-wrap">
+    <video src="renders/turntable.mp4" autoplay muted loop playsinline></video>
+  </div>
+  <p class="video-note">150 FRAMES · 30 FPS · ORTHOGRAPHIC 50° · AZIMUTH 45° → 165° → 45°</p>
+</section>
+
+<!-- ================= STILLS ================= -->
+<section id="stills">
+  <div class="sec-head"><span class="sec-no">02</span><h2>机位</h2></div>
+  <p class="sec-desc">一个等距全景定调，三个电影机位讲同一个夜晚的不同视角。点击可放大。</p>
+  <div class="grid">
+    <figure class="shot" data-cap="HERO · ORTHO 50MM EQ · 雪夜街角全景">
+      <img src="renders/01_hero_iso.png" alt="等距全景">
+      <figcaption class="shot-info"><span class="shot-title">街角全景</span><span class="shot-cam">ORTHO · 16:9</span></figcaption>
+      <div class="shot-cap">等距俯瞰：暖光从棚下溢出，脚印从马路一直走到桌前。灯笼、灯泡、蒸汽，三个暖点钉住画面。</div>
+    </figure>
+    <figure class="shot" data-cap="LOW TABLE · 50MM · F2.4">
+      <img src="renders/02_low_table.png" alt="低机位">
+      <figcaption class="shot-info"><span class="shot-title">桌前仰望</span><span class="shot-cam">50MM · F2.4</span></figcaption>
+      <div class="shot-cap">趴在桌边的高度往摊里看：帆布的波浪檐、吊灯的光晕、两柱蒸汽直冲进冷空气里。</div>
+    </figure>
+    <figure class="shot" data-cap="STREET · 34MM · F2.4">
+      <img src="renders/03_street_puddle.png" alt="街对面">
+      <figcaption class="shot-info"><span class="shot-title">街的对面</span><span class="shot-cam">34MM · F2.4</span></figcaption>
+      <div class="shot-cap">站在马路对面看过来：湿漉漉的路面接住所有光，路灯的冷白和摊子的暖橙在积水里各占一边。</div>
+    </figure>
+    <figure class="shot" data-cap="OVER SHOULDER · 44MM · F2.2">
+      <img src="renders/04_over_shoulder.png" alt="过肩">
+      <figcaption class="shot-info"><span class="shot-title">最后一碗</span><span class="shot-cam">44MM · F2.2</span></figcaption>
+      <div class="shot-cap">坐在那个位置：从他肩后看向冒着热气的锅。今晚最后一碗，慢慢吃。</div>
+    </figure>
+  </div>
+</section>
+
+<!-- ================= NOTES ================= -->
+<section id="notes">
+  <div class="sec-head"><span class="sec-no">03</span><h2>场景笔记</h2></div>
+  <p class="sec-desc">立意取自街角便利店的经典配方——一个巴掌大的角落世界、一种天气、一盏有故事的光——换成我们自己的深夜路边摊。</p>
+  <div class="notes">
+    <div class="note">
+      <h3>光</h3>
+      <ul>
+        <li><b>一盏裸灯泡</b>（320W 暖光）吊在棚檐，是全场唯一的主光</li>
+        <li><b>红灯笼</b>挂在左柱，给雪地染一小块红</li>
+        <li><b>街灯冷白</b>从画面另一侧压住马路，冷 VS 暖拉开层次</li>
+        <li><b>月光 3W 蓝青</b>铺底，让暗部不死黑</li>
+      </ul>
+    </div>
+    <div class="note">
+      <h3>雪与汽</h3>
+      <ul>
+        <li>落雪 5000 粒、缓降 1.1m/s，落地即隐</li>
+        <li>棚顶积雪压出弧度，前檐挂雪肠</li>
+        <li>锅上<b>体积蒸汽</b>冒出棚脊，混进飘雪里</li>
+        <li>路面湿反射接住所有光源</li>
+      </ul>
+    </div>
+    <div class="note">
+      <h3>叙事细节</h3>
+      <ul>
+        <li>脚印从马路一路踩到桌前</li>
+        <li>吃完的碗，<b>筷子架在碗沿</b></li>
+        <li>半瓶辣油、一杯筷子、一只空凳积着雪</li>
+        <li>侧帘被风掀起一角，墙上的菜单还亮着</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <span>雪夜馄饨摊 · WONTON STALL, SNOWY NIGHT</span>
+  <span>MODELED &amp; RENDERED IN BLENDER 5.2 EEVEE · 2026</span>
+</footer>
+
+<div id="lb"><img src="" alt=""><div class="cap"></div></div>
+
+<script>
+/* ---------- falling snow overlay ---------- */
+(function(){
+  const c = document.getElementById('snow'), ctx = c.getContext('2d');
+  let W, H, flakes;
+  function resize(){
+    W = c.width = innerWidth; H = c.height = innerHeight;
+    flakes = Array.from({length: 70}, () => ({
+      x: Math.random()*W, y: Math.random()*H,
+      r: 0.6 + Math.random()*1.7,
+      v: 0.3 + Math.random()*0.7,
+      d: Math.random()*Math.PI*2
+    }));
+  }
+  resize(); addEventListener('resize', resize);
+  (function tick(){
+    ctx.clearRect(0,0,W,H);
+    ctx.fillStyle = 'rgba(220,228,245,0.7)';
+    for (const f of flakes){
+      f.y += f.v; f.d += 0.01; f.x += Math.sin(f.d)*0.3;
+      if (f.y > H+4){ f.y = -4; f.x = Math.random()*W; }
+      ctx.globalAlpha = 0.25 + f.r*0.22;
+      ctx.beginPath(); ctx.arc(f.x, f.y, f.r, 0, Math.PI*2); ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+    requestAnimationFrame(tick);
+  })();
+})();
+
+/* ---------- lightbox ---------- */
+(function(){
+  const lb = document.getElementById('lb'), img = lb.querySelector('img'), cap = lb.querySelector('.cap');
+  document.querySelectorAll('.shot').forEach(s => s.addEventListener('click', () => {
+    img.src = s.querySelector('img').src; cap.textContent = s.dataset.cap || '';
+    lb.classList.add('open'); document.body.style.overflow = 'hidden';
+  }));
+  function close(){ lb.classList.remove('open'); document.body.style.overflow = ''; }
+  lb.addEventListener('click', close);
+  addEventListener('keydown', e => { if (e.key === 'Escape') close(); });
+})();
+</script>
+</body>
+</html>
