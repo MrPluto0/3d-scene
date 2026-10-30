@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import glbUrl from '../assets/wonton-stall.glb?url';   // ?url：让 Vite 把 GLB 当静态资产输出 hash 文件
 import { initStallScene } from '../scenes/wontonStallScene.js';
+import Bgm from '../components/Bgm.jsx';
 
 const CAMS = [
   { id: 'iso', label: '全景' },
@@ -52,6 +53,7 @@ export default function StallLive() {
       <div ref={containerRef} className="scene-mount" />
 
       <Link to="/stall" className="scene-back" aria-label="返回图集">← 馄饨摊图集</Link>
+      <Bgm storageKey="bgm:stall-live" />
 
       {phase === 'loading' && (
         <div className="live-load" aria-live="polite">

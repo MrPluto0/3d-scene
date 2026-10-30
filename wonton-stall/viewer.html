@@ -21,6 +21,23 @@
   #hint{position:fixed;right:28px;bottom:26px;z-index:10;font-family:var(--mono);font-size:11px;color:var(--dim);
     letter-spacing:.12em;text-align:right;line-height:1.9;pointer-events:none;text-shadow:0 1px 12px rgba(0,0,0,.8)}
 
+  /* BGM：右下角极简音符按钮，暗色玻璃质感同 #bar */
+  #bgmBtn{position:fixed;right:28px;bottom:96px;z-index:11;width:36px;height:36px;border-radius:999px;
+    display:flex;align-items:center;justify-content:center;color:var(--dim);cursor:pointer;
+    background:rgba(8,11,20,.72);border:1px solid var(--line);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+    transition:color .25s,border-color .25s}
+  #bgmBtn:hover{color:var(--warm);border-color:rgba(255,180,107,.35)}
+  #bgmBtn svg{display:block}
+  #bgmBtn .slash{display:none}
+  #bgmBtn.off{color:rgba(139,147,168,.55)}
+  #bgmBtn.off .slash{display:block}
+  #bgmBtn::after{content:'♪ We Never — ZHENLOE';position:absolute;right:calc(100% + 10px);top:50%;transform:translateY(-50%);
+    width:max-content;padding:5px 10px;font-family:var(--mono);font-size:11px;letter-spacing:.1em;
+    color:var(--ink);background:rgba(8,11,20,.85);border:1px solid var(--line);border-radius:6px;
+    opacity:0;pointer-events:none;transition:opacity .2s}
+  #bgmBtn:hover::after{opacity:1}
+  #bgmBtn.hide{display:none}
+
   #bar{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:10;display:flex;gap:6px;align-items:center;
     background:rgba(8,11,20,.72);border:1px solid var(--line);border-radius:999px;padding:8px 10px;
     backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);max-width:94vw;flex-wrap:wrap;justify-content:center}
@@ -41,6 +58,7 @@
   @media (max-width:640px){
     #title{left:18px;top:18px} #hint{display:none}
     #bar{bottom:14px;padding:6px 8px} .btn{padding:6px 10px;font-size:12px}
+    #bgmBtn{right:14px;bottom:76px}
   }
 </style>
 </head>
@@ -53,6 +71,16 @@
 </div>
 
 <div id="hint">左键拖拽 旋转 · 滚轮 缩放 · 右键 平移<br>双击画面 聚焦该处</div>
+
+<!-- BGM：We Never — ZHENLOE（首次交互后淡入，按钮可暂停/恢复） -->
+<audio id="bgm" src="/audio/bgm.m4a" loop preload="auto"></audio>
+<button id="bgmBtn" type="button" class="off" aria-pressed="false" aria-label="BGM 开关（We Never — ZHENLOE）" data-bgm="off">
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+    stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>
+    <line class="slash" x1="3" y1="3" x2="21" y2="21"/>
+  </svg>
+</button>
 
 <div id="bar">
   <button class="btn on" data-view="iso">全景</button>
@@ -524,6 +552,59 @@ function tick(){
 }
 tick();
 window.__three = { THREE, scene, camera, controls, setStyle };
+</script>
+
+<!-- BGM 逻辑：初始静默等待首次交互，pointerdown（含首次拖拽）后 2s 淡入到 0.35 循环；
+     按钮暂停/恢复 + localStorage 记忆（静音过不再自动播）。独立于上方 3D 逻辑。 -->
+<script>
+(() => {
+  const audio = document.getElementById('bgm');
+  const btn = document.getElementById('bgmBtn');
+  const KEY = 'bgm:stall-viewer';
+  const VOL = 0.35;
+  let raf = 0;
+  let userMuted = localStorage.getItem(KEY) === 'muted';
+
+  const fadeTo = (target, dur, done) => {
+    cancelAnimationFrame(raf);
+    const v0 = audio.volume, t0 = performance.now();
+    const step = (now) => {
+      const k = Math.min(1, (now - t0) / dur);
+      audio.volume = Math.min(1, Math.max(0, v0 + (target - v0) * k));
+      if (k < 1) raf = requestAnimationFrame(step);
+      else if (done) done();
+    };
+    raf = requestAnimationFrame(step);
+  };
+  const play = () => { audio.volume = 0; audio.play().then(() => fadeTo(VOL, 2000)).catch(() => {}); };
+  const pause = () => fadeTo(0, 500, () => audio.pause());
+
+  const sync = () => {
+    const off = audio.paused;
+    btn.classList.toggle('off', off);
+    btn.setAttribute('aria-pressed', String(!off));
+    btn.setAttribute('data-bgm', off ? 'off' : 'on');
+  };
+  audio.addEventListener('play', sync);
+  audio.addEventListener('pause', sync);
+
+  // 音频加载失败（如独立部署无 /audio）→ 隐藏按钮，不打扰
+  audio.addEventListener('error', () => btn.classList.add('hide'));
+
+  // 首次用户交互自动淡入；点按钮本身不算（交给 click，避免起播即被切停）
+  const onGesture = (e) => {
+    if (e.target && e.target.closest && e.target.closest('#bgmBtn')) return;
+    window.removeEventListener('pointerdown', onGesture, true);
+    if (userMuted) return;
+    play();
+  };
+  if (!userMuted) window.addEventListener('pointerdown', onGesture, true);
+
+  btn.addEventListener('click', () => {
+    if (audio.paused) { userMuted = false; localStorage.setItem(KEY, 'on'); play(); }
+    else { userMuted = true; localStorage.setItem(KEY, 'muted'); pause(); }
+  });
+})();
 </script>
 </body>
 </html>

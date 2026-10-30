@@ -368,6 +368,64 @@ a { color: inherit; text-decoration: none; }
   border-color: rgba(232, 164, 76, 0.45);
 }
 
+/* ---------- BGM 按钮（scene-back 同套视觉） ---------- */
+
+.bgm-btn {
+  position: absolute;
+  right: 22px;
+  bottom: 18px;
+  z-index: 10;
+  width: 38px;
+  height: 38px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(232, 228, 216, 0.72);
+  background: rgba(12, 17, 30, 0.45);
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  backdrop-filter: blur(6px);
+  cursor: pointer;
+  transition: color 0.25s ease, border-color 0.25s ease;
+}
+
+.bgm-btn:hover {
+  color: var(--ink);
+  border-color: rgba(232, 164, 76, 0.45);
+}
+
+.bgm-btn.is-off {
+  color: rgba(232, 228, 216, 0.38);
+}
+
+.bgm-btn.is-off:hover {
+  color: rgba(232, 228, 216, 0.8);
+}
+
+/* tooltip 署名 */
+.bgm-btn::after {
+  content: '♪ We Never — ZHENLOE';
+  position: absolute;
+  right: calc(100% + 10px);
+  top: 50%;
+  transform: translateY(-50%);
+  width: max-content;
+  padding: 5px 10px;
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  color: rgba(232, 228, 216, 0.85);
+  background: rgba(12, 17, 30, 0.72);
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+}
+
+.bgm-btn:hover::after {
+  opacity: 1;
+}
+
 /* ---------- stall live（/stall/live 实时场景控制栏） ---------- */
 
 .live-load {
