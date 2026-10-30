@@ -21,9 +21,9 @@ export default function Home() {
   return (
     <main className="home">
       <header className="home-header">
-        <p className="home-kicker">3D SCENE LAB</p>
-        <h1>三维实验场</h1>
-        <p className="home-sub">雪夜、暖灯与手写的 shader —— 每个小景都是一次实验。</p>
+        <p className="home-kicker">KALEIDOSCOPE</p>
+        <h1>万花筒</h1>
+        <p className="home-sub">雪夜、暖灯与手写的 shader —— 转一下，换一个世界。</p>
       </header>
 
       <section className="cards">

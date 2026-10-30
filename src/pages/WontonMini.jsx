@@ -13,7 +13,7 @@ export default function WontonMini() {
   return (
     <div className="scene-page">
       <div ref={containerRef} className="scene-mount" />
-      <Link to="/" className="scene-back" aria-label="返回首页">← 三维实验场</Link>
+      <Link to="/" className="scene-back" aria-label="返回首页">← 万花筒</Link>
     </div>
   );
 }

@@ -70,7 +70,7 @@ export default function StallGallery() {
 
   return (
     <main className="gallery">
-      <Link to="/" className="gallery-back" aria-label="返回首页">← 三维实验场</Link>
+      <Link to="/" className="gallery-back" aria-label="返回首页">← 万花筒</Link>
 
       {/* ---------- hero ---------- */}
       <header className="g-hero">
