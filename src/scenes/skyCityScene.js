@@ -1,4 +1,4 @@
-// src/scenes/skyCityScene.js — 天空之城 v2：暮色云海上的浮空城（作品集级重写）。
+// src/scenes/skyCityScene.js — 天空之城 v3：暮色云海上的浮空城（v2 重写 + 可见性修复）。
 // 纯 three.js 代码几何（无 GLB / 无 Blender / 无新依赖）：
 //   · 主岛岩体：6 层收分岩层环，逐层角向噪声扰动（层间错相位）+ 顶点径向伪噪声位移，
 //     侧面挂 InstancedMesh 风化碎石与垂藤（TubeGeometry 渐细），锥尖嵌青蓝晶体簇；
@@ -12,6 +12,12 @@
 //   · 三层团簇云海（每团 4-8 球 InstancedMesh，层速不同，云下更暗）。
 // 三渲二配方：MeshToonMaterial 3 级 gradientMap / 关键物件 inverted hull 描边 /
 // UnrealBloomPass 0.5 档 + ACES + 冷色雾 / emissive 拱窗保背光面可读。
+// v3 可见性修复（默认视距下肉眼可辨）：全景机位拉近（主体放大 ~20%，尖顶/层理/桥岛同框）；
+//   岩体沉积色带（暖岩/冷岩/赭岩按世界 y 分带交替顶点色 + 位移幅度 +23%）+ 侧后冷色轮廓光；
+//   拱窗加浅色石拱框（与窗同位形 InstancedMesh，读成「带框拱窗」而非光点）；光柱加长至穿出
+//   画外、双层加亮（外层大直径低透明 + 内层细亮芯过 bloom）；飞扶壁半径 ×1.9、弧线外扩并
+//   落到台地墩座；符文环长短段节奏化 + 段端刻度钉加长 + 主环转暖金；浮石 ×1.5、锥尖晶体更亮
+//   带亮芯、垂藤加长尾端亮绿、瀑布宽 ×1.3；贴岛碎云下移并避开默认视线不遮岩。
 // 接口：initSkyCity(container) → { setView(name), setOrbit(on), dispose() }，
 // dispose 彻底（RAF / 监听 / geometry / material / texture / renderer / canvas），
 // StrictMode 双挂载与路由切换安全。
@@ -23,9 +29,9 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
-/* 四个机位预设：全景 / 仰视光柱 / 平视云海 / 贴环看城 */
+/* 四个机位预设：全景 / 仰视光柱 / 平视云海 / 贴环看城（v3：全景拉近，主体占高约 45-55%） */
 const VIEWS = {
-  iso:   { pos: [27, 15, 34],      tgt: [0, 3, 0] },
+  iso:   { pos: [23.2, 13.4, 29.2], tgt: [0, 5.5, 0] },
   beam:  { pos: [9.5, -2.5, 15],   tgt: [0, 14, 0] },
   cloud: { pos: [36, -9, -4],      tgt: [0, 3, 0] },
   ring:  { pos: [15.2, 8.6, 4.2],  tgt: [0, 5, 0] },
@@ -95,12 +101,20 @@ export function initSkyCity(container) {
   sun.shadow.normalBias = 0.5;
   scene.add(sun);
 
-  const hemi = new THREE.HemisphereLight(0x5a7ab8, 0x141a30, 0.55);
+  const hemi = new THREE.HemisphereLight(0x5a7ab8, 0x1e2746, 0.64);
   scene.add(hemi);
 
   const coldFill = new THREE.DirectionalLight(0x4a5f8f, 0.35);  // 暗侧冷补：背光面不死黑
   coldFill.position.set(-40, 30, 40);
   scene.add(coldFill);
+
+  const rimLight = new THREE.DirectionalLight(0x8ab2e8, 0.8);   // v3 侧后冷色轮廓光：暗面岩层边缘可读
+  rimLight.position.set(-42, 7, -10);
+  scene.add(rimLight);
+
+  const frontFill = new THREE.DirectionalLight(0xa8b4d8, 0.58); // v3 机位侧低强度冷补：正面暗面岩层色带读得出
+  frontFill.position.set(26, 6, 30);
+  scene.add(frontFill);
 
   const underFill = new THREE.DirectionalLight(0x3a5a8f, 0.3);  // 底面冷蓝填充：正下方视角可读
   underFill.position.set(0, -40, 12);
@@ -246,6 +260,24 @@ export function initSkyCity(container) {
     geo.computeVertexNormals();
     return geo;
   }
+  /* v3 沉积色带：按面片量化分带（亮暖砂 / 暗冷梅 / 赭岩节奏 亮-暗-中-暗，逐三角形单色
+     → 带缘锐利），明度差拉大 —— 背光面 toon 压平后仍读得出条带；逐面微噪保留岩感 */
+  const STRATA = [0xdcb47c, 0x6a5480, 0xc08a5f, 0x6a5480].map((h) => new THREE.Color(h));
+  function strataPaint(geo, bandH = 1.05) {
+    const g = geo.index ? geo.toNonIndexed() : geo;   // 逐三角形上色：带缘不被顶点插值糊掉
+    const pos = g.attributes.position;
+    const arr = new Float32Array(pos.count * 3);
+    const tmp = new THREE.Color();
+    for (let f = 0; f < pos.count; f += 3) {
+      const yC = (pos.getY(f) + pos.getY(f + 1) + pos.getY(f + 2)) / 3;
+      const band = Math.floor((yC + 22) / bandH);
+      tmp.copy(STRATA[((band % 4) + 4) % 4]);
+      tmp.offsetHSL((rand() - 0.5) * 0.015, (rand() - 0.5) * 0.05, (rand() - 0.5) * 0.05);
+      for (let k = 0; k < 3; k++) { arr[(f + k) * 3] = tmp.r; arr[(f + k) * 3 + 1] = tmp.g; arr[(f + k) * 3 + 2] = tmp.b; }
+    }
+    g.setAttribute('color', new THREE.BufferAttribute(arr, 3));
+    return g;
+  }
 
   /* ---------- InstancedMesh 收集池（窗/栏杆柱/垛口/灯柱/碎石；帧率友好） ---------- */
   const winList = [];    // {m, c} 拱形发光窗（HDR 颜色喂 bloom）
@@ -256,8 +288,8 @@ export function initSkyCity(container) {
 
   const WIN_COLORS = () => {
     const r = rand();
-    if (r < 0.58) return new THREE.Color(2.4, 1.25, 0.5);   // 暖橙主档
-    if (r < 0.74) return new THREE.Color(1.8, 0.95, 0.42);  // 暖橙次档
+    if (r < 0.58) return new THREE.Color(2.1, 1.15, 0.48);   // 暖橙主档（v3 微降，框可读）
+    if (r < 0.74) return new THREE.Color(1.6, 0.88, 0.4);    // 暖橙次档
     if (r < 0.86) return new THREE.Color(1.3, 1.75, 2.3);   // 少量冷白
     return new THREE.Color(0.09, 0.08, 0.11);               // 部分熄灭
   };
@@ -380,8 +412,7 @@ export function initSkyCity(container) {
   const worldBob = new THREE.Group();
   islandRoot.add(worldBob);
 
-  /* ---------- 1. 主岛岩体：6 层收分位移岩层，merge 成一件 ---------- */
-  const ROCK_TOPS = [0x8a7888, 0x76657a, 0x645570, 0x57485f, 0x4a3c52, 0x403349];
+  /* ---------- 1. 主岛岩体：6 层收分位移岩层，merge 成一件（v3 沉积色带 + 位移 +23%） ---------- */
   const LAYERS = [  // [顶半径, 底半径, 高, 底面 y] —— 逐层收分 + 微外挑出层理台缘
     [7.0, 6.2, 2.6, -2.6],
     [6.3, 5.3, 2.8, -5.4],
@@ -393,12 +424,10 @@ export function initSkyCity(container) {
   {
     const parts = LAYERS.map((s, i) => {
       const geo = displaceRock(
-        new THREE.CylinderGeometry(s[0], s[1], s[2], 16, 3),
-        { amp: 0.13, bump: 0.075, phase: i * 2.399 + 0.7 }   // 黄金角错相位
+        new THREE.CylinderGeometry(s[0], s[1], s[2], 16, 8),
+        { amp: 0.16, bump: 0.092, phase: i * 2.399 + 0.7 }   // 黄金角错相位；v3 位移幅度 +23%
       );
-      const c = vary(ROCK_TOPS[Math.min(i, ROCK_TOPS.length - 1)], 0.04);
-      const g = colored(geo, c).translate(0, s[3] + s[2] / 2, 0);
-      return g;
+      return strataPaint(geo.translate(0, s[3] + s[2] / 2, 0));
     });
     const rock = new THREE.Mesh(mergeGeometries(parts), toonVC);
     rock.castShadow = rock.receiveShadow = true;
@@ -425,59 +454,78 @@ export function initSkyCity(container) {
     buildInstanced(geo, mat, debrisList, worldBob, { shadow: true, colors: true });
   }
 
-  /* 垂根/藤蔓：贝塞尔管渐细 + 叶簇，merge 成一件 */
+  /* 垂根/藤蔓：贝塞尔管渐细 + 叶簇，merge 成一件（v3 加长加亮，尾端亮绿发光梢；
+     挂在层理台缘下方 —— 半径取各层底半径 + 外挑，保证在位移岩面之外可见） */
   {
     const parts = [];
-    const vineC = new THREE.Color(0x4e5c40);
-    const leafC = [new THREE.Color(0x5f8a5a), new THREE.Color(0x6fa06a)];
+    const tips = [];   // 藤梢亮绿小灯（单独 MeshBasic 合并，HDR 色喂 bloom）
+    const vineC = new THREE.Color(0x5e7a4c);
+    const leafC = [new THREE.Color(0x74c46e), new THREE.Color(0x8ad67e)];
+    /* 层缘挂点：[台缘 y, 该处岩面基半径, 外挑量] —— 三层台缘轮转，藤幕不连成一片 */
+    const ANCHORS = [[-2.5, 6.25, 0.62], [-5.3, 5.35, 0.55], [-8.3, 4.35, 0.48]];
     for (let i = 0; i < 8; i++) {
       const a = (i / 8) * Math.PI * 2 + rand() * 0.5;
-      const r0 = 6.7 + rand() * 0.3;
-      const len = 2.8 + rand() * 2.4;
-      const p0 = new THREE.Vector3(Math.cos(a) * r0, -0.05, Math.sin(a) * r0);   // 起点埋进岩顶缘，不悬空
-      const p1 = new THREE.Vector3(Math.cos(a) * (r0 + 0.3), -len * 0.55, Math.sin(a) * (r0 + 0.3));
-      const p2 = new THREE.Vector3(Math.cos(a) * (r0 - 0.4), -len, Math.sin(a) * (r0 - 0.4));
+      const [ay, ar, out] = ANCHORS[i % 3];
+      const r0 = ar + out;                                // 位移岩面（±10%）之外
+      const len = 4.2 + rand() * 3.2;                     // v3 ×~1.5 加长
+      const p0 = new THREE.Vector3(Math.cos(a) * r0, ay, Math.sin(a) * r0);
+      const p1 = new THREE.Vector3(Math.cos(a) * (r0 + 0.35), ay - len * 0.55, Math.sin(a) * (r0 + 0.35));
+      const p2 = new THREE.Vector3(Math.cos(a) * (r0 - 0.55), ay - len, Math.sin(a) * (r0 - 0.55));
       const curve = new THREE.QuadraticBezierCurve3(p0, p1, p2);
-      const tube = taperTube(new THREE.TubeGeometry(curve, 9, 0.055, 5, false), 1, 0.3);
+      const tube = taperTube(new THREE.TubeGeometry(curve, 9, 0.1, 5, false), 1, 0.35);
       parts.push(colored(tube, vineC));
-      for (let j = 0; j < 3; j++) {  // 藤上叶簇
-        const p = curve.getPoint(0.45 + j * 0.25);
-        const lr = 0.09 + rand() * 0.06;
-        parts.push(P(GEO.sph, leafC[Math.floor(rand() * 2)], p.x, p.y, p.z, { sx: lr, sy: lr * 0.8, sz: lr }));
+      for (let j = 0; j < 5; j++) {  // 藤上叶簇（v3 加大加密：默认视距下读得出绿）
+        const p = curve.getPoint(0.22 + j * 0.19);
+        const lr = 0.22 + rand() * 0.13;
+        parts.push(P(GEO.sph, leafC[Math.floor(rand() * 2)], p.x, p.y, p.z, { sx: lr, sy: lr * 0.85, sz: lr }));
       }
+      tips.push(p2);   // 尾端亮绿梢
     }
     const vines = new THREE.Mesh(mergeGeometries(parts), toonVC);
     vines.castShadow = true;
     worldBob.add(vines);
+    const tipMesh = new THREE.Mesh(
+      mergeGeometries(tips.map((p) => P(GEO.sph, new THREE.Color(0.55, 1.9, 0.7), p.x, p.y, p.z, { sx: 0.14, sy: 0.2, sz: 0.14 }))),
+      new THREE.MeshBasicMaterial({ vertexColors: true })
+    );
+    worldBob.add(tipMesh);
   }
 
-  /* 锥尖晶体簇：4-5 颗八面体随机嵌合（不是单球），青蓝 emissive + 点光 + 辉光 */
+  /* 锥尖晶体簇：4-5 颗八面体随机嵌合（不是单球），青蓝 emissive + 一颗亮芯 + 点光 + 辉光 */
   const crystalCyan = new THREE.MeshToonMaterial({
     color: 0x0e2a33, gradientMap,
-    emissive: new THREE.Color(0.4, 1.4, 1.8), emissiveIntensity: 1.6,
+    emissive: new THREE.Color(0.55, 1.9, 2.4), emissiveIntensity: 2.2,
   });
   {
-    /* 嵌在岩尖收口处（此处岩半径 ~1.0），上半埋岩内、下半锥尖外露 = “嵌合” */
+    /* 嵌在岩尖收口下方（岩底 -17.6）：上半嵌岩、下半外露，亮芯悬在尖下空中 —— 低角度可见 */
     for (let i = 0; i < 4; i++) {
-      const c = new THREE.Mesh(new THREE.OctahedronGeometry(0.32 + rand() * 0.22, 0), crystalCyan);
-      const a = rand() * Math.PI * 2, rr = 0.15 + rand() * 0.55;
-      c.position.set(Math.cos(a) * rr, -17.0 - rand() * 0.9, Math.sin(a) * rr);
+      const c = new THREE.Mesh(new THREE.OctahedronGeometry(0.4 + rand() * 0.28, 0), crystalCyan);
+      const a = rand() * Math.PI * 2, rr = 0.3 + rand() * 0.45;
+      c.position.set(Math.cos(a) * rr, -17.2 - rand() * 0.8, Math.sin(a) * rr);
       c.rotation.set((rand() - 0.5) * 0.9, rand() * 3, (rand() - 0.5) * 0.9);
       c.scale.set(1, 1.5 + rand() * 0.8, 1);
       worldBob.add(c);
     }
-    const coreLight = new THREE.PointLight(0x66d8ff, 2.8, 16, 1.8);
-    coreLight.position.set(0, -17.8, 0);       // 岩尖下方岩体外，真正照亮锥底与晶体
+    /* v3 亮芯：尖下空中一颗 HDR 青蓝八面体（岩体之外不被遮挡），过 bloom 阈值成星点 */
+    const core = new THREE.Mesh(
+      new THREE.OctahedronGeometry(0.34, 0),
+      new THREE.MeshBasicMaterial({ color: new THREE.Color(1.1, 3.4, 4.0) })
+    );
+    core.position.set(0, -18.5, 0);
+    core.scale.set(1, 1.7, 1);
+    worldBob.add(core);
+    const coreLight = new THREE.PointLight(0x66d8ff, 3.6, 18, 1.8);
+    coreLight.position.set(0, -18.8, 0);       // 岩尖下方岩体外，真正照亮锥底与晶体
     worldBob.add(coreLight);
     const coreGlow = new THREE.Sprite(new THREE.SpriteMaterial({
-      map: glowTex, color: 0x7fe0ff, transparent: true, opacity: 0.5,
+      map: glowTex, color: 0x7fe0ff, transparent: true, opacity: 0.62,
       blending: THREE.AdditiveBlending, depthWrite: false, fog: false,
     }));
-    coreGlow.position.set(0, -17.2, 0);
-    coreGlow.scale.set(4.5, 4.5, 1);
+    coreGlow.position.set(0, -18.2, 0);
+    coreGlow.scale.set(7, 7, 1);
     worldBob.add(coreGlow);
     tickers.push((dt, t) => {
-      crystalCyan.emissiveIntensity = 1.6 + 0.35 * Math.sin(t * 1.1);
+      crystalCyan.emissiveIntensity = 2.2 + 0.45 * Math.sin(t * 1.1);
     });
   }
 
@@ -584,8 +632,8 @@ export function initSkyCity(container) {
         for (let ci = 0; ci < cols; ci++) {
           if (rand() < 0.2) continue;
           const off = cols === 1 ? (rand() - 0.5) * 0.12 * s : (ci === 0 ? -1 : 1) * faceLen * 0.23;
-          const sxw = s * (0.85 + rand() * 0.3);
-          const syw = Math.min(s * (0.85 + rand() * 0.3), Math.max(0.55 * s, (L.h - 0.16 * s) / 0.3));
+          const sxw = s * (1.1 + rand() * 0.3);
+          const syw = Math.min(s * (1.1 + rand() * 0.3), Math.max(0.55 * s, (L.h - 0.16 * s) / 0.3));
           const wy = L.y0 + Math.max(0.08 * s, (L.h - 0.3 * syw) * 0.5);
           const lx = f.ax === 'z' ? off : f.sign * (L.w / 2 + 0.02);
           const lz = f.ax === 'z' ? f.sign * (L.d / 2 + 0.02) : off;
@@ -780,21 +828,23 @@ export function initSkyCity(container) {
         const a = (k / 6) * Math.PI * 2 + i * 0.26;
         const wf = 0.55;                                   // 窗在级内的高度比例
         const wallR = THREE.MathUtils.lerp(r0 * 1.04, r1 * 1.02, wf);
-        pushWin(winList, idPM, Math.cos(a) * (wallR + 0.02), yb + LH * wf, Math.sin(a) * (wallR + 0.02), -a + Math.PI / 2, 1.5, 1.5);
+        pushWin(winList, idPM, Math.cos(a) * (wallR + 0.02), yb + LH * wf, Math.sin(a) * (wallR + 0.02), -a + Math.PI / 2, 1.7, 1.7);
       }
     }
     const topY = H0 + 1.6 + LV * LH;      // ≈ 16.7
     /* 顶部尖锥 */
     parts.push(P(GEO.cone6, trimC, 0, topY + 1.1, 0, { sx: 1.05, sy: 2.2, sz: 1.05 }));
     parts.push(P(GEO.cone6, towerC, 0, topY + 2.5, 0, { sx: 0.62, sy: 1.4, sz: 0.62 }));
-    /* 4 道飞扶壁：贝塞尔管从塔身弧出，搭到内台地缘 */
+    /* 4 道飞扶壁：贝塞尔管从塔身弧出，搭到内台地缘（v3 半径 ×1.9、弧线更外扩、落墩座） */
     for (let k = 0; k < 4; k++) {
       const a = k * (Math.PI / 2) + 0.42;
       const p0 = new THREE.Vector3(Math.cos(a) * 1.26, 9.6, Math.sin(a) * 1.26);   // 微嵌入塔壁（塔壁 r≈1.26）
-      const p2 = new THREE.Vector3(Math.cos(a) * 3.0, 3.5, Math.sin(a) * 3.0);
-      const p1 = new THREE.Vector3(Math.cos(a) * 3.05, 9.4, Math.sin(a) * 3.05);
-      const tube = taperTube(new THREE.TubeGeometry(new THREE.QuadraticBezierCurve3(p0, p1, p2), 12, 0.1, 6, false), 1, 0.55);
+      const p1 = new THREE.Vector3(Math.cos(a) * 3.7, 9.2, Math.sin(a) * 3.7);     // 控制点外扩 = 受力弧
+      const p2 = new THREE.Vector3(Math.cos(a) * 3.15, 3.7, Math.sin(a) * 3.15);   // 落到台地墩座顶
+      const tube = taperTube(new THREE.TubeGeometry(new THREE.QuadraticBezierCurve3(p0, p1, p2), 12, 0.19, 7, false), 1, 0.6);
       parts.push(colored(tube, trimC));
+      /* 台地墩座：扶壁落点的受力墩（嵌进台缘） */
+      parts.push(P(GEO.box, towerC, Math.cos(a) * 3.15, 3.35, Math.sin(a) * 3.15, { sx: 0.72, sy: 0.7, sz: 0.72, ry: -a }));
     }
     const tower = new THREE.Mesh(mergeGeometries(parts), toonVC);
     tower.castShadow = tower.receiveShadow = true;
@@ -823,14 +873,15 @@ export function initSkyCity(container) {
       crystalLight.intensity = 1.8 + 0.9 * p;
     });
 
-    /* 冲天光柱：加法混合圆柱，顶点色沿高度渐隐（加法下色→黑即透明），微脉动 */
+    /* 冲天光柱：加法混合圆柱，顶点色沿高度渐隐（加法下色→黑即透明），微脉动。
+       v3：加长至 60 穿出画外；双层 —— 外层大直径低透明 + 内层细亮芯（HDR 过 bloom） */
     function beamMesh(rTop, rBot, h, cBottom, yBase) {
       const geo = new THREE.CylinderGeometry(rTop, rBot, h, 14, 6, true);
       const pos = geo.attributes.position;
       const arr = new Float32Array(pos.count * 3);
       for (let i = 0; i < pos.count; i++) {
         const f = 1 - (pos.getY(i) + h / 2) / h;      // 底 1 → 顶 0
-        const ff = f * f * 0.85 + f * 0.15;
+        const ff = f * f * 0.7 + f * 0.3;             // v3 衰减更缓：中上段仍可见，仅顶端渐隐
         arr[i * 3] = cBottom.r * ff;
         arr[i * 3 + 1] = cBottom.g * ff;
         arr[i * 3 + 2] = cBottom.b * ff;
@@ -845,16 +896,17 @@ export function initSkyCity(container) {
       worldBob.add(m);
       return mat;
     }
-    const beamOuterMat = beamMesh(0.55, 0.34, 36, new THREE.Color(1.15, 1.0, 0.72), topY + 3.2);
-    const beamInnerMat = beamMesh(0.22, 0.14, 36, new THREE.Color(1.6, 1.45, 1.05), topY + 3.2);
+    const beamOuterMat = beamMesh(0.85, 0.5, 60, new THREE.Color(1.35, 1.18, 0.82), topY + 3.2);
+    const beamInnerMat = beamMesh(0.3, 0.2, 60, new THREE.Color(2.3, 2.05, 1.5), topY + 3.2);
     tickers.push((dt, t) => {
       const p = 0.5 + 0.5 * Math.sin(t * 0.55);
-      beamOuterMat.opacity = 0.34 + 0.2 * p;
-      beamInnerMat.opacity = 0.42 + 0.3 * p;
+      beamOuterMat.opacity = 0.5 + 0.22 * p;
+      beamInnerMat.opacity = 0.6 + 0.3 * p;
     });
   }
 
-  /* ---------- 5. 断续符文光环 ×3：弧段 InstancedMesh + 段端符文钉，主环挂浮石 ---------- */
+  /* ---------- 5. 断续符文光环 ×3：弧段 InstancedMesh + 段端符文钉，主环挂浮石 ----------
+     v3：段长长短节奏化（短钉/长段交替为主），段端刻度钉加长更亮、垂直于环面 */
   function makeRuneRing({ radius, tube, y, hdr, tiltX, tiltZ, spin, withStones }) {
     const tilt = new THREE.Group();
     tilt.position.y = y;
@@ -862,28 +914,28 @@ export function initSkyCity(container) {
     scene.add(tilt);
     const spinG = new THREE.Group();
     tilt.add(spinG);
-    const arcLens = [0.55, 1.0, 1.6];
+    const arcLens = [0.3, 1.25, 2.2];   // 短钉 / 中段 / 长段
     const buckets = [[], [], []];
     const studs = [];
     let a = rand() * Math.PI * 2;
     const a0 = a;
     while (a - a0 < Math.PI * 2 - 0.3) {
-      const b = rand() < 0.4 ? 0 : rand() < 0.62 ? 1 : 2;
+      const b = rand() < 0.45 ? 0 : (rand() < 0.68 ? 2 : 1);   // 长短交替为主，中段少量
       const arc = arcLens[b] * (0.8 + rand() * 0.5);
       if (a - a0 + arc > Math.PI * 2) break;
       dummy.position.set(0, 0, 0);
       dummy.rotation.set(0, -a, 0);
       dummy.scale.set(1, 1, 1);
       dummy.updateMatrix();
-      buckets[b].push(dummy.matrix.clone());
-      for (const aa of [a, a + arc]) {  // 段端符文钉
+      buckets[b].push(dummy.matrix.clone())
+      for (const aa of [a, a + arc]) {  // 段端符文钉（沿环面法向立起的刻度钉）
         dummy.position.set(Math.cos(aa) * radius, 0, Math.sin(aa) * radius);
         dummy.rotation.set(0, 0, 0);
-        dummy.scale.set(1, 1 + rand() * 1.2, 1);
+        dummy.scale.set(1, 1.6 + rand() * 1.2, 1);
         dummy.updateMatrix();
         studs.push({ m: dummy.matrix.clone() });
       }
-      a += arc + 0.16 + rand() * 0.55;   // 段长/间隙随机节奏
+      a += arc + 0.16 + rand() * 0.55;   // 段长/间隙节奏
     }
     const arcMat = new THREE.MeshBasicMaterial({ color: 0xffffff, vertexColors: true });
     arcLens.forEach((arcLen, b) => {
@@ -898,11 +950,11 @@ export function initSkyCity(container) {
     });
     if (studs.length) {
       const sMat = new THREE.MeshBasicMaterial({ color: 0xffffff, vertexColors: true });
-      const sGeo = whiteAttr(new THREE.OctahedronGeometry(tube * 2.4, 0));
+      const sGeo = whiteAttr(new THREE.OctahedronGeometry(tube * 3.0, 0));
       const im = new THREE.InstancedMesh(sGeo, sMat, studs.length);
       studs.forEach((it, i) => {
         im.setMatrixAt(i, it.m);
-        im.setColorAt(i, new THREE.Color(hdr[0] * 1.3, hdr[1] * 1.3, hdr[2] * 1.3));
+        im.setColorAt(i, new THREE.Color(hdr[0] * 1.6, hdr[1] * 1.6, hdr[2] * 1.6));
       });
       im.instanceMatrix.needsUpdate = true;
       im.instanceColor.needsUpdate = true;
@@ -913,34 +965,35 @@ export function initSkyCity(container) {
     if (withStones) makeFloatStones(spinG, radius, tube);
     return spinG;
   }
-  /* 主环浮石：位移岩 + 自身微光环 torus，随环公转 + 各自沉浮 */
+  /* 主环浮石：位移岩 + 自身微光环 torus，随环公转 + 各自沉浮（v3 ×1.5 放大、光环加粗提亮） */
   const haloStones = [];
   function makeFloatStones(spinG, radius, tube) {
     const stoneMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(0.9, 2.4, 2.1) });
     const haloMat = new THREE.MeshBasicMaterial({
-      color: new THREE.Color(0.5, 1.6, 1.4), transparent: true, opacity: 0.65,
+      color: new THREE.Color(0.55, 1.9, 1.6), transparent: true, opacity: 0.8,
       blending: THREE.AdditiveBlending, depthWrite: false, fog: false,
     });
     for (let i = 0; i < 5; i++) {
       const a = (i / 5) * Math.PI * 2 + 0.6 + rand() * 0.3;
       const g = new THREE.Group();
       g.position.set(Math.cos(a) * radius, 0, Math.sin(a) * radius);
-      const r = 0.28 + rand() * 0.22;
+      const r = 0.42 + rand() * 0.33;                       // v3 ×1.5
       const rock = new THREE.Mesh(displacedChunk(new THREE.IcosahedronGeometry(r, 1), 0.3, rand() * 10), stoneMat);
       rock.rotation.y = rand() * 6;
       const halo = new THREE.Mesh(
-        new THREE.TorusGeometry(r * 1.55, 0.02, 6, 26).rotateX(Math.PI / 2 + (rand() - 0.5) * 0.6),
+        new THREE.TorusGeometry(r * 1.6, 0.035, 6, 26).rotateX(Math.PI / 2 + (rand() - 0.5) * 0.6),
         haloMat
       );
       g.add(rock, halo);
       spinG.add(g);
-      haloStones.push({ g, y0: -(tube + r + 0.28), ph: rand() * Math.PI * 2 });
+      haloStones.push({ g, y0: -(tube + r + 0.34), ph: rand() * Math.PI * 2 });
     }
     tickers.push((dt, t) => {
       for (const st of haloStones) st.g.position.y = st.y0 + Math.sin(t * 0.7 + st.ph) * 0.2;
     });
   }
-  const ring1 = makeRuneRing({ radius: 11, tube: 0.16, y: 3.2, hdr: [0.55, 2.4, 2.0], tiltX: 0.1, tiltZ: -0.06, spin: 0.1, withStones: true });
+  /* 主环 v3 转暖金（浮石保持青绿对比） */
+  const ring1 = makeRuneRing({ radius: 11, tube: 0.16, y: 3.2, hdr: [2.7, 1.85, 0.65], tiltX: 0.1, tiltZ: -0.06, spin: 0.1, withStones: true });
   makeRuneRing({ radius: 13.8, tube: 0.13, y: 7.6, hdr: [2.6, 1.8, 0.8], tiltX: -0.08, tiltZ: 0.12, spin: -0.065, withStones: false });
   makeRuneRing({ radius: 8.6, tube: 0.11, y: -2.8, hdr: [0.9, 1.5, 2.6], tiltX: 0.14, tiltZ: 0.05, spin: 0.045, withStones: false });
 
@@ -952,7 +1005,7 @@ export function initSkyCity(container) {
     g.position.set(Math.cos(ang) * dist, baseY, Math.sin(ang) * dist);
     g.rotation.y = rand() * Math.PI * 2;
     scene.add(g);
-    /* 岩体：三层小号位移岩 merge */
+    /* 岩体：三层小号位移岩 merge（v3 沉积色带 + 位移 +21%） */
     const parts = [];
     const RL = [
       [s * 1.05, s * 0.8, s * 0.9, -s * 0.9],
@@ -960,8 +1013,8 @@ export function initSkyCity(container) {
       [s * 0.55, s * 0.05, s * 1.0, -s * 2.8],
     ];
     RL.forEach((L, i) => {
-      const geo = displaceRock(new THREE.CylinderGeometry(L[0], L[1], L[2], 12, 2), { amp: 0.14, bump: 0.08, phase: i * 2.4 + ang });
-      parts.push(colored(geo, vary(ROCK_TOPS[i + 1], 0.05)).translate(0, L[3] + L[2] / 2, 0));
+      const geo = displaceRock(new THREE.CylinderGeometry(L[0], L[1], L[2], 12, 4), { amp: 0.17, bump: 0.095, phase: i * 2.4 + ang });
+      parts.push(strataPaint(geo.translate(0, L[3] + L[2] / 2, 0), s * 0.5 + 0.3));
     });
     /* 草顶 + 檐土 */
     parts.push(colored(new THREE.CylinderGeometry(s * 1.12, s * 1.02, s * 0.26, 12), vary(0x5f8a5a, 0.06)).translate(0, s * 0.13, 0));
@@ -975,7 +1028,11 @@ export function initSkyCity(container) {
     }
     if (kind.includes('tree')) tree(s * 0.5, -s * 0.3, s);
     if (kind === 'trees') { tree(-s * 0.5, s * 0.1, s * 0.85); tree(s * 0.15, s * 0.5, s * 0.7); }
-    const isle = new THREE.Mesh(mergeGeometries(parts), toonVC);
+    /* 岛体 merge：岩层已逐面非索引化，其余部件统一 toNonIndexed 再合并（索引混用会 merge 失败） */
+    const isle = new THREE.Mesh(
+      mergeGeometries(parts.map((p) => (p.index ? p.toNonIndexed() : p))),
+      toonVC
+    );
     isle.castShadow = isle.receiveShadow = true;
     g.add(isle);
     addOutline(isle, 0.035);
@@ -1002,7 +1059,7 @@ export function initSkyCity(container) {
         const p0 = new THREE.Vector3(s * 1.0, 0, (ri - 0.5) * 0.14 * s);
         const p1 = new THREE.Vector3(s * 1.45, -fall * 0.5, (ri - 0.5) * 0.3 * s);
         const p2 = new THREE.Vector3(s * 1.7, -fall, (ri - 0.5) * 0.5 * s);
-        g.add(makeRibbon(new THREE.QuadraticBezierCurve3(p0, p1, p2), 0.17 * s, 0.09 * s));
+        g.add(makeRibbon(new THREE.QuadraticBezierCurve3(p0, p1, p2), 0.22 * s, 0.12 * s));   // v3 宽 ×1.3
       }
       const mist = new THREE.Sprite(new THREE.SpriteMaterial({
         map: glowTex, color: 0xbfe0ff, transparent: true, opacity: 0.4,
@@ -1047,20 +1104,21 @@ export function initSkyCity(container) {
     geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
     geo.setIndex(idx);
     const mat = new THREE.MeshBasicMaterial({
-      vertexColors: true, transparent: true, opacity: 0.75, side: THREE.DoubleSide,
+      vertexColors: true, transparent: true, opacity: 0.85, side: THREE.DoubleSide,
       blending: THREE.AdditiveBlending, depthWrite: false, fog: false,
     });
     return new THREE.Mesh(geo, mat);
   }
   const floaters = [];
-  /* [方位角, 距主岛心, 基准高度, 体量, 内容, 瀑布, 桥接同步] —— 手工布点避免均匀对称 */
+  /* [方位角, 距主岛心, 基准高度, 体量, 内容, 瀑布, 桥接同步] —— 手工布点避免均匀对称。
+     v3：0 号桥接岛微升微移（默认近景机位下仍入画），5 号浮岛外推（避免近景遮挡） */
   const ISLES = [
-    [0.55, 16, -3.0, 1.0, 'tower+tree', true, true],
+    [0.55, 17.5, -1.4, 1.0, 'tower+tree', true, true],
     [2.20, 20, 2.5, 1.3, 'tower', false, false],
     [3.60, 14, -6.0, 0.8, 'trees', false, false],
     [4.60, 22, -1.0, 1.15, 'tower', true, false],
     [5.50, 18, 4.0, 0.9, 'tree+house', false, false],
-    [1.35, 26, 6.5, 0.7, 'tree', false, false],
+    [1.35, 29, 6.5, 0.7, 'tree', false, false],
   ];
   const isleGroups = ISLES.map((it) => makeIsle({
     ang: it[0], dist: it[1], baseY: it[2], s: it[3], kind: it[4], hasFall: it[5], synced: it[6],
@@ -1138,12 +1196,13 @@ export function initSkyCity(container) {
   }
 
   /* ---------- 7. 云海：三层团簇（每团 4-8 球 InstancedMesh），层速不同，云下更暗 ---------- */
-  function cloudLayer({ y, n, rMin, rMax, sMin, sMax, tint, speed }) {
+  function cloudLayer({ y, n, rMin, rMax, sMin, sMax, tint, speed, avoidAz }) {
     const g = new THREE.Group();
     scene.add(g);
     const list = [];
     for (let i = 0; i < n; i++) {
       const ca = rand() * Math.PI * 2;
+      if (avoidAz !== undefined && angDist(ca, avoidAz) < 0.6) continue;   // v3：避开默认视线方位，不遮岩锥
       const cr = Math.sqrt(THREE.MathUtils.lerp(rMin * rMin, rMax * rMax, rand()));
       const cx = Math.cos(ca) * cr, cz = Math.sin(ca) * cr;
       const k = 4 + Math.floor(rand() * 5);           // 每团 4-8 球
@@ -1169,7 +1228,8 @@ export function initSkyCity(container) {
   }
   cloudLayer({ y: -14.6, n: 13, rMin: 6, rMax: 55, sMin: 3.2, sMax: 6.2, tint: 0xf0dcd2, speed: 0.004 });   // 上层：暖白粉顶光，连成海
   cloudLayer({ y: -19.6, n: 10, rMin: 10, rMax: 68, sMin: 4.5, sMax: 8.5, tint: 0x565c7d, speed: 0.0026 }); // 下层：压暗压深
-  cloudLayer({ y: -11.8, n: 8, rMin: 8, rMax: 30, sMin: 1.6, sMax: 3.0, tint: 0xb9bfd6, speed: -0.006 });  // 贴岛底碎云
+  /* 贴岛底碎云：v3 下移收小 + 避开默认机位方位（atan2(29.2, 23.2) ≈ 0.9），岩体层理不被遮 */
+  cloudLayer({ y: -12.9, n: 8, rMin: 8, rMax: 26, sMin: 1.6, sMax: 2.6, tint: 0xb9bfd6, speed: -0.006, avoidAz: 0.9 });
 
   /* 主城整体极缓沉浮（幅度刻意小于小岛，稳） */
   tickers.push((dt, t) => { worldBob.position.y = Math.sin(t * 0.22 + 1.0) * 0.15; });
@@ -1185,9 +1245,50 @@ export function initSkyCity(container) {
     sh.closePath();
     return whiteAttr(new THREE.ExtrudeGeometry(sh, { depth: 0.05, bevelEnabled: false, curveSegments: 6 }));
   })();
+  /* v3 拱窗石框：外拱 − 内拱的环带描边（比窗大一圈，浅色石色 + 微自发光），
+     与窗共用同一实例位形列表 —— 一份矩阵两份几何，远看读成「带框拱窗」而非光点 */
+  const frameGeo = (() => {
+    const w = 0.17, hh = 0.3, r = w / 2;
+    const R = 0.19, top = 0.44, base = -0.05;   // 外拱：半宽 ×2.2、总高 ×1.47、下探出门槛
+    const outer = new THREE.Shape();
+    outer.moveTo(-R, base);
+    outer.lineTo(-R, top - R);
+    outer.absarc(0, top - R, R, Math.PI, 0, true);
+    outer.lineTo(R, base);
+    outer.closePath();
+    const hole = new THREE.Path();
+    hole.moveTo(-r, 0);
+    hole.lineTo(-r, hh - r);
+    hole.absarc(0, hh - r, r, Math.PI, 0, true);
+    hole.lineTo(r, 0);
+    hole.closePath();
+    outer.holes.push(hole);
+    return whiteAttr(new THREE.ExtrudeGeometry(outer, { depth: 0.048, bevelEnabled: false, curveSegments: 6 }));
+  })();
+  const frameMat = new THREE.MeshToonMaterial({
+    color: 0xe0d0a8, gradientMap, emissive: 0x6b5330, emissiveIntensity: 1.35,
+  });
+  /* 窗后暗色垫板：亮窗与浅框之间的暗环 —— 无论奶油墙还是赤陶墙，带框拱窗都读得出 */
+  const backGeo = (() => {
+    const R = 0.145, top = 0.365, base = -0.03;
+    const sh = new THREE.Shape();
+    sh.moveTo(-R, base);
+    sh.lineTo(-R, top - R);
+    sh.absarc(0, top - R, R, Math.PI, 0, true);
+    sh.lineTo(R, base);
+    sh.closePath();
+    return whiteAttr(new THREE.ExtrudeGeometry(sh, { depth: 0.036, bevelEnabled: false, curveSegments: 6 }));
+  })();
+  const backMat = new THREE.MeshBasicMaterial({ color: 0x2a2018 });
   const winMat = new THREE.MeshBasicMaterial({ color: 0xffffff, vertexColors: true });
+  buildInstanced(backGeo, backMat, winList, worldBob);
   buildInstanced(winGeo, winMat, winList, worldBob, { colors: true });
-  for (const batch of isleWinBatches) buildInstanced(winGeo, winMat, batch.list, batch.parent, { colors: true });
+  buildInstanced(frameGeo, frameMat, winList, worldBob);
+  for (const batch of isleWinBatches) {
+    buildInstanced(backGeo, backMat, batch.list, batch.parent);
+    buildInstanced(winGeo, winMat, batch.list, batch.parent, { colors: true });
+    buildInstanced(frameGeo, frameMat, batch.list, batch.parent);
+  }
   buildInstanced(new THREE.BoxGeometry(0.035, 0.5, 0.035), toon(0xd8cfbf), postList, worldBob, { shadow: true });
   buildInstanced(new THREE.BoxGeometry(0.5, 0.42, 0.3), toon(0x8a7f76), merlonList, worldBob, { shadow: true });
   { /* 灯柱：杆 + 暖光小球头（两套 InstancedMesh 同位形） */
@@ -1201,7 +1302,7 @@ export function initSkyCity(container) {
   /* ---------- 后期：UnrealBloom（阈值卡在 1.0，只让窗/晶体/光环过曝） ---------- */
   const composer = new EffectComposer(renderer);
   composer.addPass(new RenderPass(scene, camera));
-  const bloom = new UnrealBloomPass(new THREE.Vector2(width, height), 0.52, 0.55, 1.0);
+  const bloom = new UnrealBloomPass(new THREE.Vector2(width, height), 0.44, 0.5, 1.0);
   composer.addPass(bloom);
   composer.addPass(new OutputPass());
 
