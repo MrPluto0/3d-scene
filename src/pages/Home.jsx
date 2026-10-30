@@ -27,6 +27,11 @@ export default function Home() {
           <h2 className="shard-name">馄饨摊 · 重制</h2>
           <p className="shard-tag">Blender GLB · 图集与实时</p>
         </Link>
+        <Link to="/sky-city" className="shard shard--c">
+          <span className="shard-no">03</span>
+          <h2 className="shard-name">天空之城</h2>
+          <p className="shard-tag">暮色云海 · 纯代码三渲二</p>
+        </Link>
       </nav>
 
       <footer className="kaleido-foot">

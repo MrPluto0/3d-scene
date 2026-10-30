@@ -5,6 +5,7 @@ import Home from './pages/Home.jsx';
 import WontonMini from './pages/WontonMini.jsx';
 import StallGallery from './pages/StallGallery.jsx';
 import StallLive from './pages/StallLive.jsx';
+import SkyCity from './pages/SkyCity.jsx';
 import './styles.css';
 
 // StrictMode double-invokes effects in dev — the scene modules' cleanup()
@@ -17,6 +18,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
         <Route path="/wonton-mini" element={<WontonMini />} />
         <Route path="/stall" element={<StallGallery />} />
         <Route path="/stall/live" element={<StallLive />} />
+        <Route path="/sky-city" element={<SkyCity />} />
       </Routes>
     </BrowserRouter>
   </React.StrictMode>
