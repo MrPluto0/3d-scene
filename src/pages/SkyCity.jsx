@@ -6,10 +6,10 @@ import { initSkyCity } from '../scenes/skyCityScene.js';
 import Bgm from '../components/Bgm.jsx';
 
 const CAMS = [
-  { id: 'iso',   label: '全景' },
-  { id: 'beam',  label: '仰视光柱' },
-  { id: 'cloud', label: '平视云海' },
-  { id: 'ring',  label: '贴环看城' },
+  { id: 'iso',    label: '全景' },
+  { id: 'fall',   label: '瀑布' },
+  { id: 'bridge', label: '桥塔' },
+  { id: 'cloud',  label: '云海' },
 ];
 
 export default function SkyCity() {
