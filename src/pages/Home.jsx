@@ -30,7 +30,7 @@ export default function Home() {
         <Link to="/sky-city" className="shard shard--c">
           <span className="shard-no">03</span>
           <h2 className="shard-name">天空之城</h2>
-          <p className="shard-tag">暮色云海 · 纯代码三渲二</p>
+          <p className="shard-tag">黄金时刻 · 程序化浮空城</p>
         </Link>
       </nav>
 
