@@ -27,10 +27,10 @@ export default function Home() {
           <h2 className="shard-name">馄饨摊 · 重制</h2>
           <p className="shard-tag">Blender GLB · 图集与实时</p>
         </Link>
-        <Link to="/terrarium" className="shard shard--c">
+        <Link to="/sky-city" className="shard shard--c">
           <span className="shard-no">03</span>
           <h2 className="shard-name">天空之城</h2>
-          <p className="shard-tag">玻璃立方体 · 三段光照</p>
+          <p className="shard-tag">黄金时刻 · 程序化浮空城</p>
         </Link>
       </nav>
 

@@ -229,17 +229,6 @@ a { color: inherit; text-decoration: none; }
 
 .shard--c:hover { transform: rotate(-0.9deg) translateY(-5px); }
 
-/* 全屏同源 iframe（自包含静态场景页） */
-.scene-iframe {
-  position: fixed;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  border: 0;
-  display: block;
-  background: #05070d;
-}
-
 @keyframes shardIn {
   from { opacity: 0; transform: translateY(26px) rotate(0deg); }
 }
@@ -547,6 +536,75 @@ a { color: inherit; text-decoration: none; }
 
 .live-toggle.on {
   color: var(--amber);
+}
+
+/* ---------- sky-city 场景标题卡 ---------- */
+
+.sky-title {
+  position: absolute;
+  left: 34px;
+  bottom: 36px;
+  z-index: 9;
+  pointer-events: none;
+  color: var(--ink);
+  animation: skyTitleIn 1.5s cubic-bezier(0.2, 0.7, 0.2, 1) 0.15s backwards;
+}
+
+/* 柔和暗角背板，保证任何云色下文字可读 */
+.sky-title::before {
+  content: "";
+  position: absolute;
+  inset: -30px -72px -26px -38px;
+  z-index: -1;
+  border-radius: 10px;
+  background: radial-gradient(120% 110% at 22% 72%, rgba(8, 12, 22, 0.46), rgba(8, 12, 22, 0) 72%);
+}
+
+.sky-kicker {
+  margin: 0 0 10px;
+  font-size: 10px;
+  letter-spacing: 0.34em;
+  color: rgba(255, 244, 226, 0.6);
+}
+
+.sky-name {
+  margin: 0;
+  font-family: var(--serif);
+  font-weight: 400;
+  font-size: clamp(30px, 3.5vw, 52px);
+  letter-spacing: 0.14em;
+  line-height: 1;
+  color: #fdf6e6;
+  text-shadow: 0 3px 30px rgba(0, 0, 0, 0.4);
+}
+
+.sky-sub {
+  margin: 13px 0 0;
+  font-size: 12px;
+  letter-spacing: 0.2em;
+  color: rgba(255, 246, 232, 0.72);
+}
+
+.sky-meta {
+  margin: 20px 0 0;
+  font-size: 10.5px;
+  letter-spacing: 0.16em;
+  color: rgba(255, 246, 232, 0.4);
+}
+
+@keyframes skyTitleIn {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: none; }
+}
+
+@media (max-width: 860px) {
+  .sky-title { left: 18px; bottom: 148px; }
+  .sky-name { font-size: 27px; letter-spacing: 0.1em; }
+  .sky-kicker { font-size: 9px; letter-spacing: 0.24em; }
+  .sky-sub { font-size: 10.5px; margin-top: 9px; }
+  .sky-meta { display: none; }
+  .live-bar { gap: 7px; padding: 7px 9px; }
+  .live-btn { font-size: 11.5px; padding: 6px 9px; letter-spacing: 0.1em; }
 }
 
 /* ---------- stall gallery（/stall 图集页） ---------- */
