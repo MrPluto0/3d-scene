@@ -29,7 +29,7 @@ export default function Home() {
         </Link>
         <Link to="/terrarium" className="shard shard--c">
           <span className="shard-no">03</span>
-          <h2 className="shard-name">悬浮生态舱</h2>
+          <h2 className="shard-name">天空之城</h2>
           <p className="shard-tag">玻璃立方体 · 三段光照</p>
         </Link>
       </nav>

@@ -6,7 +6,7 @@ export default function Terrarium() {
     <iframe
       className="scene-iframe"
       src="/terrarium/index.html"
-      title="悬浮生态舱 No.07 · 玻璃立方体微缩生态"
+      title="天空之城 No.07 · 玻璃立方体"
       allow="fullscreen"
     />
   );
