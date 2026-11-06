@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Terrarium · 悬浮玻璃微缩生态 No.07</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect x='2' y='2' width='12' height='12' fill='none' stroke='%23c9a86a' stroke-width='2'/></svg>">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #0b0d11; }
+  #app { width: 100%; height: 100%; }
+  canvas { display: block; }
+
+  .ui { position: fixed; inset: 0; pointer-events: none;
+        font-family: "Helvetica Neue", "PingFang SC", "Microsoft YaHei", sans-serif;
+        color: #e8e4da; z-index: 10; }
+
+  .title { position: absolute; top: 34px; left: 40px; }
+  .title .no { font-size: 11px; letter-spacing: 4px; color: #8d8a80; margin-bottom: 8px; }
+  .title h1 { font-size: 21px; font-weight: 500; letter-spacing: 6px; color: #ddd8cb; }
+  .title .sub { font-size: 11px; letter-spacing: 2px; color: #77746c; margin-top: 8px; }
+
+  .modebar { position: absolute; left: 50%; bottom: 36px; transform: translateX(-50%);
+             display: flex; gap: 10px; pointer-events: auto; }
+  .modebar button {
+    appearance: none; border: 1px solid rgba(220,210,190,0.22);
+    background: rgba(16,18,24,0.45); backdrop-filter: blur(8px);
+    color: #b9b4a6; font-size: 12px; letter-spacing: 4px; text-indent: 4px;
+    padding: 9px 22px; border-radius: 999px; cursor: pointer;
+    transition: all .35s ease; }
+  .modebar button:hover { color: #efe9da; border-color: rgba(220,210,190,0.5); }
+  .modebar button.on { color: #14130f; background: #d8cfba; border-color: #d8cfba; }
+
+  .hint { position: absolute; right: 40px; bottom: 40px; font-size: 10px;
+          letter-spacing: 3px; color: #5d5a52; }
+  .credit { position: absolute; right: 40px; top: 38px; font-size: 10px;
+            letter-spacing: 3px; color: #5d5a52; text-align: right; line-height: 1.9; }
+
+  /* 电影感暗角 */
+  .vignette { position: absolute; inset: 0; pointer-events: none;
+    background: radial-gradient(ellipse at 50% 46%, transparent 55%, rgba(0,0,0,0.26) 100%); }
+
+  #err { position: absolute; inset: 0; display: none; place-items: center;
+         color: #c99; font-size: 13px; background: #0b0d11; z-index: 99; }
+</style>
+<script type="importmap">
+{
+  "imports": {
+    "three": "./vendor/build/three.module.js",
+    "three/addons/": "./vendor/jsm/"
+  }
+}
+</script>
+</head>
+<body>
+<div id="app"></div>
+<div class="ui">
+  <div class="vignette"></div>
+  <div class="title">
+    <div class="no">GLASS BIOSPHERE — UNIT 07</div>
+    <h1>悬 浮 生 态 舱</h1>
+    <div class="sub">PROCEDURAL · ZERO ASSETS · THREE.JS r169 · V2 ALPINE</div>
+  </div>
+  <div class="credit">EVERY GEOMETRY / TEXTURE<br>GENERATED IN CODE</div>
+  <div class="modebar">
+    <button data-mode="day" class="on">白昼</button>
+    <button data-mode="dusk">黄昏</button>
+    <button data-mode="night">夜晚</button>
+  </div>
+  <div class="hint">拖 拽 旋 转 · 滚 轮 缩 放</div>
+</div>
+<div id="err">当前环境不支持 WebGL2，无法渲染。</div>
+<script type="module" src="./main.js"></script>
+</body>
+</html>
