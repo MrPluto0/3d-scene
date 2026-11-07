@@ -8,10 +8,10 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 
-import { buildBase } from '../../wonton-mini/modules/base.js';
-import { buildStall } from '../../wonton-mini/modules/stall.js';
-import { buildProps } from '../../wonton-mini/modules/props.js';
-import { Snowfall, Steam } from '../../wonton-mini/modules/particles.js';
+import { buildBase } from './wontonmini/base.js';
+import { buildStall } from './wontonmini/stall.js';
+import { buildProps } from './wontonmini/props.js';
+import { Snowfall, Steam } from './wontonmini/particles.js';
 
 export function initWontonMini(container) {
   const width = container.clientWidth || window.innerWidth;
